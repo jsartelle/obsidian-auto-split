@@ -2,7 +2,7 @@
 
 If there are no files open and you open one (or create a new one!), this plugin will automatically open both editor and preview panes side by side.
 
-![](preview.gif)
+![](https://raw.githubusercontent.com/jsartelle/obsidian-auto-split/master/preview.gif)
 
 ### Changelog
 
