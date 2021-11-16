@@ -40,7 +40,11 @@ export default class AutoSplitPlugin extends Plugin {
 
             this.registerEvent(
                 this.app.workspace.on("file-open", async file => {
-                    if (!this.hasOpenFiles && file) {
+                    if (
+                        this.app.workspace.activeLeaf &&
+                        !this.hasOpenFiles &&
+                        file
+                    ) {
                         const newState = Object.assign(
                             {},
                             this.app.workspace.activeLeaf.getViewState()
@@ -106,9 +110,7 @@ export default class AutoSplitPlugin extends Plugin {
                         }
                     }
 
-                    this.app.workspace.onLayoutReady(() => {
-                        this.updateHasOpenFiles();
-                    });
+                    this.updateHasOpenFiles();
                 })
             );
         });
