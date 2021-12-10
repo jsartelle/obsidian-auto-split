@@ -1,9 +1,13 @@
-import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
+import { App, Platform, Plugin, PluginSettingTab, Setting } from "obsidian";
 
 type SplitDirectionSetting = "vertical" | "horizontal" | "auto";
 type PaneTypeSetting = "source" | "preview";
 
 interface AutoSplitSettings {
+    enabledOn: {
+        desktop: boolean;
+        mobile: boolean;
+    };
     minSize: number;
     direction: SplitDirectionSetting;
     editorFirst: boolean;
@@ -12,6 +16,10 @@ interface AutoSplitSettings {
 }
 
 const DEFAULT_SETTINGS: AutoSplitSettings = {
+    enabledOn: {
+        desktop: true,
+        mobile: true
+    },
     minSize: 1000,
     direction: "auto",
     editorFirst: true,
@@ -32,6 +40,16 @@ export default class AutoSplitPlugin extends Plugin {
         }
     }
 
+    get isEnabledOnPlatform() {
+        if (Platform.isDesktop) {
+            return this.settings.enabledOn.desktop;
+        } else if (Platform.isMobile) {
+            return this.settings.enabledOn.mobile;
+        } else {
+            return true;
+        }
+    }
+
     async onload() {
         await this.loadSettings();
 
@@ -41,6 +59,7 @@ export default class AutoSplitPlugin extends Plugin {
             this.registerEvent(
                 this.app.workspace.on("file-open", async file => {
                     if (
+                        this.isEnabledOnPlatform &&
                         this.app.workspace.activeLeaf &&
                         !this.hasOpenFiles &&
                         file
@@ -150,8 +169,30 @@ class AutoSplitSettingTab extends PluginSettingTab {
             this.app
         );
 
+        containerEl.createEl("h3", { text: "Enable On" });
+
+        new Setting(containerEl).setName("Desktop").addToggle(toggle => {
+            toggle
+                .setValue(this.plugin.settings.enabledOn.desktop)
+                .onChange(async value => {
+                    this.plugin.settings.enabledOn.desktop = value;
+                    await this.plugin.saveSettings();
+                });
+        });
+
+        new Setting(containerEl).setName("Mobile").addToggle(toggle => {
+            toggle
+                .setValue(this.plugin.settings.enabledOn.mobile)
+                .onChange(async value => {
+                    this.plugin.settings.enabledOn.mobile = value;
+                    await this.plugin.saveSettings();
+                });
+        });
+
+        containerEl.createEl("h3", { text: "Settings" });
+
         new Setting(containerEl)
-            .setName("Minimum Main Area Size")
+            .setName("Minimum Size")
             .setDesc(
                 `Only split if the main area is at least this wide or tall, depending on split direction. The main area was ${rootWidth}x${rootHeight} when you opened this tab. (default: 1000)`
             )
@@ -173,14 +214,14 @@ class AutoSplitSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName("Split Direction")
             .setDesc(
-                "Vertical = left/right, Horizontal = up/down. Auto chooses based on the longer side of the main area."
+                "Vertical = left/right, Horizontal = up/down. Auto is based on the longer side of the main area."
             )
             .addDropdown(dropdown => {
                 dropdown
                     .addOptions({
+                        auto: "Auto",
                         vertical: "Vertical",
-                        horizontal: "Horizontal",
-                        auto: "Auto"
+                        horizontal: "Horizontal"
                     })
                     .setValue(this.plugin.settings.direction)
                     .onChange(async value => {
@@ -193,7 +234,7 @@ class AutoSplitSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName("Editor First")
             .setDesc(
-                "Place the editor pane on the left in vertical splits, or the top in horizontal splits."
+                "Place the editor pane on the left (vertical) or the top (horizontal)."
             )
             .addToggle(toggle => {
                 toggle
@@ -205,7 +246,7 @@ class AutoSplitSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
-            .setName("Pane To Focus")
+            .setName("Focus On")
             .setDesc("Select which pane should be focused.")
             .addDropdown(dropdown => {
                 dropdown
@@ -224,7 +265,7 @@ class AutoSplitSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName("Link Panes")
             .setDesc(
-                "Link the panes so that their scroll position and open file stay synced."
+                "Link the panes to keep their scroll position and open file the same."
             )
             .addToggle(toggle => {
                 toggle
