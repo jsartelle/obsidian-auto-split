@@ -95,6 +95,9 @@ export default class AutoSplitPlugin extends Plugin {
                             const currentLeaf = this.app.workspace.activeLeaf;
 
                             const viewState = currentLeaf.getViewState();
+
+                            if (viewState.type !== "markdown") return;
+
                             viewState.state.mode =
                                 viewState.state.mode === "preview"
                                     ? "source"
