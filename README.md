@@ -6,6 +6,8 @@ Opens notes with the editor & preview side-by-side when your workspace is empty.
 
 ### Changelog
 
+- 1.1.2: 2022-01-30
+    - Fixed: prevent splitting if there are already files open
 - 1.1.1: 2022-01-12
     - Changed: only activate on Markdown files
 - 1.1.0: 2021-12-10

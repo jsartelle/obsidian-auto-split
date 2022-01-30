@@ -61,6 +61,8 @@ export default class AutoSplitPlugin extends Plugin {
                     if (
                         this.isEnabledOnPlatform &&
                         this.app.workspace.activeLeaf &&
+                        // @ts-expect-error
+                        this.app.workspace.rootSplit.children.length === 1 &&
                         !this.hasOpenFiles &&
                         file
                     ) {
