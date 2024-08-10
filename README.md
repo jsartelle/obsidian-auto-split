@@ -2,6 +2,8 @@
 
 Opens notes with the editor & preview side-by-side when your workspace is empty.
 
+**Only works on desktop & tablet devices - Obsidian 1.0+ doesn't support split panes on phones.**
+
 ![](https://raw.githubusercontent.com/jsartelle/obsidian-auto-split/master/preview.gif)
 
 ### Changelog

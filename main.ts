@@ -11,10 +11,6 @@ type SplitDirectionSetting = 'vertical' | 'horizontal' | 'auto'
 type PaneTypeSetting = 'source' | 'preview'
 
 interface AutoSplitSettings {
-  enabledOn: {
-    desktop: boolean
-    mobile: boolean
-  }
   minSize: number
   direction: SplitDirectionSetting
   editorFirst: boolean
@@ -23,10 +19,6 @@ interface AutoSplitSettings {
 }
 
 const DEFAULT_SETTINGS: AutoSplitSettings = {
-  enabledOn: {
-    desktop: true,
-    mobile: true
-  },
   minSize: 1000,
   direction: 'auto',
   editorFirst: true,
@@ -47,16 +39,6 @@ export default class AutoSplitPlugin extends Plugin {
     }
   }
 
-  get isEnabledOnPlatform() {
-    if (Platform.isDesktop) {
-      return this.settings.enabledOn.desktop
-    } else if (Platform.isMobile) {
-      return this.settings.enabledOn.mobile
-    } else {
-      return true
-    }
-  }
-
   async onload() {
     await this.loadSettings()
 
@@ -69,7 +51,7 @@ export default class AutoSplitPlugin extends Plugin {
             this.app.workspace.getActiveViewOfType(MarkdownView)?.leaf
 
           if (
-            this.isEnabledOnPlatform &&
+            !Platform.isPhone &&
             activeLeaf &&
             this.app.workspace.getLeavesOfType('markdown').length === 1 &&
             !this.hasOpenFiles &&
@@ -143,7 +125,7 @@ class AutoSplitSettingTab extends PluginSettingTab {
 
     containerEl.empty()
 
-    containerEl.createEl('h2', { text: 'Settings' })
+    containerEl.createEl('h2', { text: 'Auto Split Settings' })
 
     const { width: rootWidth, height: rootHeight } = getRootContainerSize(
       this.app
@@ -227,28 +209,6 @@ class AutoSplitSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings()
           })
       })
-
-    containerEl.createEl('h2', { text: 'Devices' })
-
-    new Setting(containerEl)
-      .setName('Enable on desktop')
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.enabledOn.desktop)
-          .onChange(async (value) => {
-            this.plugin.settings.enabledOn.desktop = value
-            await this.plugin.saveSettings()
-          })
-      })
-
-    new Setting(containerEl).setName('Enable on mobile').addToggle((toggle) => {
-      toggle
-        .setValue(this.plugin.settings.enabledOn.mobile)
-        .onChange(async (value) => {
-          this.plugin.settings.enabledOn.mobile = value
-          await this.plugin.saveSettings()
-        })
-    })
   }
 }
 
