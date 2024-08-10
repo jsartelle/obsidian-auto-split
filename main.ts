@@ -1,4 +1,11 @@
-import { App, Platform, Plugin, PluginSettingTab, Setting } from 'obsidian'
+import {
+  App,
+  Platform,
+  Plugin,
+  PluginSettingTab,
+  Setting,
+  MarkdownView
+} from 'obsidian'
 
 type SplitDirectionSetting = 'vertical' | 'horizontal' | 'auto'
 type PaneTypeSetting = 'source' | 'preview'
@@ -28,9 +35,9 @@ const DEFAULT_SETTINGS: AutoSplitSettings = {
 }
 
 export default class AutoSplitPlugin extends Plugin {
-  settings: AutoSplitSettings
+  settings!: AutoSplitSettings
 
-  protected hasOpenFiles: boolean
+  protected hasOpenFiles = false
   protected updateHasOpenFiles() {
     try {
       this.hasOpenFiles =
@@ -58,26 +65,16 @@ export default class AutoSplitPlugin extends Plugin {
 
       this.registerEvent(
         this.app.workspace.on('file-open', async (file) => {
+          const activeLeaf =
+            this.app.workspace.getActiveViewOfType(MarkdownView)?.leaf
+
           if (
             this.isEnabledOnPlatform &&
-            this.app.workspace.activeLeaf &&
-            // @ts-expect-error
-            this.app.workspace.rootSplit.children.length === 1 &&
+            activeLeaf &&
+            this.app.workspace.getLeavesOfType('markdown').length === 1 &&
             !this.hasOpenFiles &&
             file
           ) {
-            const newState = Object.assign(
-              {},
-              this.app.workspace.activeLeaf.getViewState()
-            )
-
-            newState.state.mode =
-              newState.state.mode === 'source' ? 'preview' : 'source'
-
-            if (this.settings.linkPanes) {
-              newState.group = this.app.workspace.activeLeaf
-            }
-
             const rootSize = getRootContainerSize(this.app)
             let direction = this.settings.direction
             if (direction === 'auto') {
@@ -89,30 +86,29 @@ export default class AutoSplitPlugin extends Plugin {
               (direction === 'vertical' ? rootSize.width : rootSize.height) >
               this.settings.minSize
             ) {
-              const currentLeaf = this.app.workspace.activeLeaf
-
-              const viewState = currentLeaf.getViewState()
+              const viewState = activeLeaf.getViewState()
 
               if (viewState.type !== 'markdown') return
 
+              viewState.active = false
               viewState.state.mode =
                 viewState.state.mode === 'preview' ? 'source' : 'preview'
 
               const firstPane = this.settings.editorFirst ? 'source' : 'preview'
 
               const newLeaf = this.app.workspace.createLeafBySplit(
-                currentLeaf,
+                activeLeaf,
                 direction,
                 viewState.state.mode === firstPane
               )
-              newLeaf.openFile(file, viewState)
+              await newLeaf.openFile(file, viewState)
 
               if (this.settings.linkPanes) {
-                currentLeaf.setGroupMember(newLeaf)
+                activeLeaf.setGroupMember(newLeaf)
               }
 
               if (viewState.state.mode === this.settings.paneToFocus) {
-                this.app.workspace.setActiveLeaf(newLeaf, true, true)
+                this.app.workspace.setActiveLeaf(newLeaf, { focus: true })
               }
             }
           }
@@ -147,38 +143,16 @@ class AutoSplitSettingTab extends PluginSettingTab {
 
     containerEl.empty()
 
-    containerEl.createEl('h2', { text: 'Auto Split Settings' })
+    containerEl.createEl('h2', { text: 'Settings' })
 
     const { width: rootWidth, height: rootHeight } = getRootContainerSize(
       this.app
     )
 
-    containerEl.createEl('h3', { text: 'Enable On' })
-
-    new Setting(containerEl).setName('Desktop').addToggle((toggle) => {
-      toggle
-        .setValue(this.plugin.settings.enabledOn.desktop)
-        .onChange(async (value) => {
-          this.plugin.settings.enabledOn.desktop = value
-          await this.plugin.saveSettings()
-        })
-    })
-
-    new Setting(containerEl).setName('Mobile').addToggle((toggle) => {
-      toggle
-        .setValue(this.plugin.settings.enabledOn.mobile)
-        .onChange(async (value) => {
-          this.plugin.settings.enabledOn.mobile = value
-          await this.plugin.saveSettings()
-        })
-    })
-
-    containerEl.createEl('h3', { text: 'Settings' })
-
     new Setting(containerEl)
       .setName('Minimum Size')
       .setDesc(
-        `Only split if the main area is at least this wide or tall, depending on split direction. The main area was ${rootWidth}x${rootHeight} when you opened this tab. (default: 1000)`
+        `Only split if the main area is at least this wide or tall, depending on split direction. The main area was ${rootWidth}x${rootHeight} when you opened this screen. (default: 1000)`
       )
       .addText((text) => {
         text.inputEl.type = 'number'
@@ -196,7 +170,7 @@ class AutoSplitSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Split Direction')
       .setDesc(
-        'Vertical = left/right, Horizontal = up/down. Auto is based on the longer side of the main area.'
+        'Vertical = left/right, Horizontal = up/down. Auto splits vertically if the main area is wider than it is tall, and horizontally otherwise.'
       )
       .addDropdown((dropdown) => {
         dropdown
@@ -214,9 +188,7 @@ class AutoSplitSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Editor First')
-      .setDesc(
-        'Place the editor pane on the left (vertical) or the top (horizontal).'
-      )
+      .setDesc('Place the pane with the editor on the left/top.')
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.editorFirst)
@@ -245,7 +217,7 @@ class AutoSplitSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Link Panes')
       .setDesc(
-        'Link the panes to keep their scroll position and open file the same.'
+        'Link the panes so their scroll position and open file stay the same.'
       )
       .addToggle((toggle) => {
         toggle
@@ -255,12 +227,33 @@ class AutoSplitSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings()
           })
       })
+
+    containerEl.createEl('h2', { text: 'Devices' })
+
+    new Setting(containerEl)
+      .setName('Enable on desktop')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.enabledOn.desktop)
+          .onChange(async (value) => {
+            this.plugin.settings.enabledOn.desktop = value
+            await this.plugin.saveSettings()
+          })
+      })
+
+    new Setting(containerEl).setName('Enable on mobile').addToggle((toggle) => {
+      toggle
+        .setValue(this.plugin.settings.enabledOn.mobile)
+        .onChange(async (value) => {
+          this.plugin.settings.enabledOn.mobile = value
+          await this.plugin.saveSettings()
+        })
+    })
   }
 }
 
 function getRootContainerSize(app: App) {
-  const rootContainer: HTMLElement = (app.workspace.rootSplit as any)
-    .containerEl
+  const rootContainer: HTMLElement = app.workspace.rootSplit.doc.documentElement
 
   if (rootContainer) {
     return {
@@ -268,7 +261,7 @@ function getRootContainerSize(app: App) {
       height: rootContainer.clientHeight
     }
   } else {
-    console.warn(`auto-split couldn't get root container, using window size`)
+    console.warn(`[Auto Split] couldn't get root container, using window size`)
     return {
       width: window.innerWidth,
       height: window.innerHeight

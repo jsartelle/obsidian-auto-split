@@ -6,6 +6,11 @@ Opens notes with the editor & preview side-by-side when your workspace is empty.
 
 ### Changelog
 
+- 1.2: 2024-08-04
+    - Changed: clean up settings and update copy
+    - Changed: update dependencies
+    - Changed: code cleanup
+    - Changed: remove deprecated API usage
 - 1.1.2: 2022-01-30
     - Fixed: prevent splitting if there are already files open
 - 1.1.1: 2022-01-12
