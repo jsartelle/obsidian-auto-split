@@ -1,6 +1,6 @@
 ## Auto Split
 
-Opens notes with the editor & preview side-by-side when your workspace is empty.
+Opens notes with the editor & preview side-by-side when your workspace is empty. Also adds a command to split the current pane into two linked panes.
 
 **Only works on desktop & tablet devices - Obsidian 1.0+ doesn't support split panes on phones.**
 
@@ -9,10 +9,11 @@ Opens notes with the editor & preview side-by-side when your workspace is empty.
 ### Changelog
 
 - 1.2: 2024-08-04
+    - Added: "Split and link current pane" command
+    - Changed: disable on phones
     - Changed: clean up settings and update copy
-    - Changed: update dependencies
     - Changed: code cleanup
-    - Changed: remove deprecated API usage
+    - Changed: update dependencies
 - 1.1.2: 2022-01-30
     - Fixed: prevent splitting if there are already files open
 - 1.1.1: 2022-01-12

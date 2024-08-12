@@ -4,13 +4,16 @@ import {
   Plugin,
   PluginSettingTab,
   Setting,
-  MarkdownView
+  MarkdownView,
+  setIcon,
+  type TFile,
 } from 'obsidian'
 
 type SplitDirectionSetting = 'vertical' | 'horizontal' | 'auto'
 type PaneTypeSetting = 'source' | 'preview'
 
 interface AutoSplitSettings {
+  autoSplit: boolean
   minSize: number
   direction: SplitDirectionSetting
   editorFirst: boolean
@@ -19,11 +22,12 @@ interface AutoSplitSettings {
 }
 
 const DEFAULT_SETTINGS: AutoSplitSettings = {
+  autoSplit: true,
   minSize: 1000,
   direction: 'auto',
   editorFirst: true,
   paneToFocus: 'source',
-  linkPanes: true
+  linkPanes: true,
 }
 
 export default class AutoSplitPlugin extends Plugin {
@@ -42,65 +46,39 @@ export default class AutoSplitPlugin extends Plugin {
   async onload() {
     await this.loadSettings()
 
+    this.addSettingTab(new AutoSplitSettingTab(this.app, this))
+
+    this.addCommand({
+      id: 'split-current-pane',
+      name: 'Split and link current pane',
+      checkCallback: (checking) => {
+        if (Platform.isPhone) return false
+        const file = this.app.workspace.activeEditor?.file
+        if (!file) return false
+        if (!checking) this.splitActiveFile(file)
+        return true
+      },
+    })
+
     this.app.workspace.onLayoutReady(() => {
       this.updateHasOpenFiles()
 
       this.registerEvent(
         this.app.workspace.on('file-open', async (file) => {
-          const activeLeaf =
-            this.app.workspace.getActiveViewOfType(MarkdownView)?.leaf
-
           if (
+            this.settings.autoSplit &&
             !Platform.isPhone &&
-            activeLeaf &&
             this.app.workspace.getLeavesOfType('markdown').length === 1 &&
             !this.hasOpenFiles &&
             file
           ) {
-            const rootSize = getRootContainerSize(this.app)
-            let direction = this.settings.direction
-            if (direction === 'auto') {
-              direction =
-                rootSize.width >= rootSize.height ? 'vertical' : 'horizontal'
-            }
-
-            if (
-              (direction === 'vertical' ? rootSize.width : rootSize.height) >
-              this.settings.minSize
-            ) {
-              const viewState = activeLeaf.getViewState()
-
-              if (viewState.type !== 'markdown') return
-
-              viewState.active = false
-              viewState.state.mode =
-                viewState.state.mode === 'preview' ? 'source' : 'preview'
-
-              const firstPane = this.settings.editorFirst ? 'source' : 'preview'
-
-              const newLeaf = this.app.workspace.createLeafBySplit(
-                activeLeaf,
-                direction,
-                viewState.state.mode === firstPane
-              )
-              await newLeaf.openFile(file, viewState)
-
-              if (this.settings.linkPanes) {
-                activeLeaf.setGroupMember(newLeaf)
-              }
-
-              if (viewState.state.mode === this.settings.paneToFocus) {
-                this.app.workspace.setActiveLeaf(newLeaf, { focus: true })
-              }
-            }
+            await this.splitActiveFile(file, true)
           }
 
           this.updateHasOpenFiles()
         })
       )
     })
-
-    this.addSettingTab(new AutoSplitSettingTab(this.app, this))
   }
 
   async loadSettings() {
@@ -109,6 +87,48 @@ export default class AutoSplitPlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings)
+  }
+
+  async splitActiveFile(file: TFile, autoSplit = false) {
+    const activeLeaf =
+      this.app.workspace.getActiveViewOfType(MarkdownView)?.leaf
+    if (!activeLeaf) return
+
+    const rootSize = getRootContainerSize(this.app)
+    let direction = this.settings.direction
+    if (direction === 'auto') {
+      direction = rootSize.width >= rootSize.height ? 'vertical' : 'horizontal'
+    }
+
+    if (
+      (direction === 'vertical' ? rootSize.width : rootSize.height) >
+      this.settings.minSize
+    ) {
+      const viewState = activeLeaf.getViewState()
+
+      if (viewState.type !== 'markdown') return
+
+      viewState.active = false
+      viewState.state.mode =
+        viewState.state.mode === 'preview' ? 'source' : 'preview'
+
+      const firstPane = this.settings.editorFirst ? 'source' : 'preview'
+
+      const newLeaf = this.app.workspace.createLeafBySplit(
+        activeLeaf,
+        direction,
+        autoSplit && viewState.state.mode === firstPane
+      )
+      await newLeaf.openFile(file, viewState)
+
+      if (!autoSplit || this.settings.linkPanes) {
+        activeLeaf.setGroupMember(newLeaf)
+      }
+
+      if (autoSplit && viewState.state.mode === this.settings.paneToFocus) {
+        this.app.workspace.setActiveLeaf(newLeaf, { focus: true })
+      }
+    }
   }
 }
 
@@ -125,7 +145,32 @@ class AutoSplitSettingTab extends PluginSettingTab {
 
     containerEl.empty()
 
+    if (Platform.isPhone) {
+      const infoText = containerEl.createEl('div', {
+        cls: 'auto-split-settings-info-text',
+      })
+      setIcon(infoText, 'info')
+      infoText.createEl('p', {
+        text: 'Split panes are not supported on phones.',
+      })
+      return
+    }
+
     containerEl.createEl('h2', { text: 'Auto Split Settings' })
+
+    new Setting(containerEl)
+      .setName('Split Automatically')
+      .setDesc(
+        'Turn off to only split when the command "Split and link current pane" is used.'
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.autoSplit)
+          .onChange(async (value) => {
+            this.plugin.settings.autoSplit = value
+            await this.plugin.saveSettings()
+          })
+      })
 
     const { width: rootWidth, height: rootHeight } = getRootContainerSize(
       this.app
@@ -159,7 +204,7 @@ class AutoSplitSettingTab extends PluginSettingTab {
           .addOptions({
             auto: 'Auto',
             vertical: 'Vertical',
-            horizontal: 'Horizontal'
+            horizontal: 'Horizontal',
           })
           .setValue(this.plugin.settings.direction)
           .onChange(async (value) => {
@@ -167,6 +212,14 @@ class AutoSplitSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings()
           })
       })
+
+    const infoText = containerEl.createEl('div', {
+      cls: 'auto-split-settings-info-text',
+    })
+    setIcon(infoText, 'info')
+    infoText.createEl('p', {
+      text: 'Settings below do not apply to the "Split and link current pane" command.',
+    })
 
     new Setting(containerEl)
       .setName('Editor First')
@@ -187,7 +240,7 @@ class AutoSplitSettingTab extends PluginSettingTab {
         dropdown
           .addOptions({
             source: 'Editor',
-            preview: 'Preview'
+            preview: 'Preview',
           })
           .setValue(this.plugin.settings.paneToFocus)
           .onChange(async (value) => {
@@ -218,13 +271,13 @@ function getRootContainerSize(app: App) {
   if (rootContainer) {
     return {
       width: rootContainer.clientWidth,
-      height: rootContainer.clientHeight
+      height: rootContainer.clientHeight,
     }
   } else {
     console.warn(`[Auto Split] couldn't get root container, using window size`)
     return {
       width: window.innerWidth,
-      height: window.innerHeight
+      height: window.innerHeight,
     }
   }
 }
